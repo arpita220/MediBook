@@ -1,7 +1,20 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 const AppContext = createContext(null);
 const DEFAULT_THEME = 'dark';
+
+const normalizeAppointment = (appt) => ({
+  ...appt,
+  doctorId: appt.doctor_code || appt.doctorId,
+  patientId: appt.patient_id || appt.patientId,
+  patientName: appt.patient_name || appt.patientName,
+  patientPhone: appt.patient_phone || appt.patientPhone,
+  doctorName: appt.doctor_name || appt.doctorName,
+  doctorSpecialty: appt.specialty || appt.doctorSpecialty,
+  bookedAt: appt.booked_at || appt.bookedAt,
+  doctorNote: appt.doctor_note || appt.doctorNote || '',
+  date: appt.appointment_date || appt.date,
+  slot: appt.appointment_time || appt.slot,
+});
 
 // Generate next 14 days of slots dynamically
 function genSlots(daysOffOn = [], slotSets = ['08:00','09:00','10:00','11:00','13:00','14:00','15:00','16:00']) {
@@ -57,22 +70,9 @@ export function AppProvider({ children }) {
   const [appointments, setAppointments] = useState([]);
   const [doctors, setDoctors]         = useState(DOCTORS_DATA);
   const [patients, setPatients]       = useState([]);
+  const [notifications, setNotifications] = useState([]);
 
-  const normalizeAppointment = (appt) => ({
-    ...appt,
-    doctorId: appt.doctor_code || appt.doctorId,
-    patientId: appt.patient_id || appt.patientId,
-    patientName: appt.patient_name || appt.patientName,
-    patientPhone: appt.patient_phone || appt.patientPhone,
-    doctorName: appt.doctor_name || appt.doctorName,
-    doctorSpecialty: appt.specialty || appt.doctorSpecialty,
-    bookedAt: appt.booked_at || appt.bookedAt,
-    doctorNote: appt.doctor_note || appt.doctorNote || '',
-    date: appt.appointment_date || appt.date,
-    slot: appt.appointment_time || appt.slot,
-  });
-
-  const fetchAppointments = async (currentUser) => {
+  const fetchAppointments = useCallback(async (currentUser) => {
     if (!currentUser) return;
     const params = new URLSearchParams();
     if (currentUser.role === 'doctor') {
@@ -91,9 +91,9 @@ export function AppProvider({ children }) {
     } catch (e) {
       console.error('Failed to load appointments', e);
     }
-  };
+  }, []);
 
-  const fetchPatients = async () => {
+  const fetchPatients = useCallback(async () => {
     try {
       const resp = await fetch(`${BACKEND_URL}/api/patients`);
       const data = await resp.json();
@@ -102,7 +102,49 @@ export function AppProvider({ children }) {
     } catch (e) {
       console.error('Failed to load patients', e);
     }
-  };
+  }, []);
+
+  const fetchNotifications = useCallback(async (currentUser) => {
+    if (!currentUser) {
+      setNotifications([]);
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    try {
+      const resp = await fetch(`${BACKEND_URL}/api/notifications`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await resp.json();
+      if (!resp.ok) throw new Error(data.error || 'Failed to load notifications');
+      setNotifications(data);
+    } catch (e) {
+      console.error('Failed to load notifications', e);
+    }
+  }, []);
+
+  const markNotificationRead = useCallback(async (id) => {
+    const token = localStorage.getItem('token');
+    const resp = await fetch(`${BACKEND_URL}/api/notifications/${id}/read`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Failed to mark notification as read');
+    setNotifications(prev => prev.map(item => item.id === id ? { ...item, is_read: 1 } : item));
+  }, []);
+
+  const sendAppointmentReminder = useCallback(async (appointmentId) => {
+    const token = localStorage.getItem('token');
+    const resp = await fetch(`${BACKEND_URL}/api/appointments/${appointmentId}/remind`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Failed to send doctor reminder');
+    return data;
+  }, []);
 
   useEffect(() => {
     // Auto-login if token present
@@ -132,13 +174,34 @@ export function AppProvider({ children }) {
   useEffect(() => {
     if (!user) {
       setAppointments([]);
+      setNotifications([]);
       return;
     }
     fetchAppointments(user);
+    fetchNotifications(user);
     if (user.role === 'admin') {
       fetchPatients();
     }
-  }, [user?.id, user?.doctorId, user?.role]);
+  }, [user, fetchAppointments, fetchNotifications, fetchPatients]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const refreshDashboardData = () => {
+      if (document.visibilityState !== 'visible') return;
+      fetchNotifications(user);
+      if (user.role === 'admin') fetchAppointments(user);
+    };
+    const intervalId = window.setInterval(refreshDashboardData, 30000);
+    window.addEventListener('focus', refreshDashboardData);
+    document.addEventListener('visibilitychange', refreshDashboardData);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refreshDashboardData);
+      document.removeEventListener('visibilitychange', refreshDashboardData);
+    };
+  }, [user, fetchAppointments, fetchNotifications]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -187,7 +250,7 @@ export function AppProvider({ children }) {
     }
   };
 
-  const logout = () => { setUser(null); setAppointments([]); localStorage.removeItem('token'); };
+  const logout = () => { setUser(null); setAppointments([]); setNotifications([]); localStorage.removeItem('token'); };
 
   const updateAppointmentStatus = async (id, data) => {
     try {
@@ -377,6 +440,7 @@ export function AppProvider({ children }) {
       doctors, patients, DOCTOR_ACCOUNTS, appointments,
       bookAppointment, cancelAppointment, rescheduleAppointment, rateAppointment,
       acceptAppointment, rejectAppointment, completeAppointment,
+      notifications, markNotificationRead, sendAppointmentReminder,
       myAppointments, doctorAppointments, myDoctorProfile,
     }}>
       {children}

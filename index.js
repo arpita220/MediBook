@@ -35,6 +35,15 @@ const decodeJwt = (token) => {
   }
 };
 
+const requireAuth = (req, res, next) => {
+  const authHeader = req.headers.authorization || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+  const payload = token ? decodeJwt(token) : null;
+  if (!payload?.userId) return res.status(401).json({ error: 'Authentication required.' });
+  req.authPayload = payload;
+  next();
+};
+
 initDb((seedErr) => {
   if (seedErr) console.error('Seed error:', seedErr);
   app.listen(PORT, () => {
@@ -64,6 +73,62 @@ app.get('/api/patients', (req, res) => {
   db.all(sql, [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
     res.json(rows);
+  });
+});
+
+app.get('/api/notifications', requireAuth, (req, res) => {
+  const sql = `
+    SELECT id, appointment_id, type, message, is_read, created_at
+    FROM notifications
+    WHERE user_id = ?
+    ORDER BY created_at DESC, id DESC
+    LIMIT 50
+  `;
+  db.all(sql, [req.authPayload.userId], (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows);
+  });
+});
+
+app.patch('/api/notifications/:id/read', requireAuth, (req, res) => {
+  db.run(
+    'UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?',
+    [req.params.id, req.authPayload.userId],
+    function (err) {
+      if (err) return res.status(500).json({ error: err.message });
+      if (this.changes === 0) return res.status(404).json({ error: 'Notification not found.' });
+      res.json({ success: true });
+    }
+  );
+});
+
+app.post('/api/appointments/:id/remind', requireAuth, (req, res) => {
+  if (req.authPayload.role !== 'admin') {
+    return res.status(403).json({ error: 'Only admins can send doctor reminders.' });
+  }
+
+  const appointmentSql = `
+    SELECT a.id, a.status, a.appointment_date, a.appointment_time, d.user_id AS doctor_user_id
+    FROM appointments a
+    JOIN doctors d ON d.id = a.doctor_id
+    WHERE a.id = ?
+  `;
+  db.get(appointmentSql, [req.params.id], (err, appointment) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!appointment) return res.status(404).json({ error: 'Appointment not found.' });
+    if (appointment.status !== 'pending') {
+      return res.status(409).json({ error: 'Only pending appointments can be reminded.' });
+    }
+
+    const message = `Admin reminder: Please review the pending appointment request for ${appointment.appointment_date} at ${appointment.appointment_time}.`;
+    db.run(
+      'INSERT INTO notifications (user_id, appointment_id, type, message) VALUES (?, ?, ?, ?)',
+      [appointment.doctor_user_id, appointment.id, 'doctor_reminder', message],
+      function (insertErr) {
+        if (insertErr) return res.status(500).json({ error: insertErr.message });
+        res.status(201).json({ id: this.lastID, message });
+      }
+    );
   });
 });
 

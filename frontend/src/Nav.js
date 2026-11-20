@@ -3,8 +3,10 @@ import { useApp } from './AppContext';
 import { Avatar } from './components';
 
 export default function Nav({ page, setPage }) {
-  const { user, logout, theme, toggleTheme } = useApp();
+  const { user, logout, theme, toggleTheme, notifications, markNotificationRead } = useApp();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const unreadCount = notifications.filter(notification => !notification.is_read).length;
 
   const isDoctor = user?.role === 'doctor';
   const isAdmin = user?.role === 'admin';
@@ -52,6 +54,53 @@ export default function Nav({ page, setPage }) {
           }}><span style={{ fontSize:16 }}>{icon}</span>{label}</button>
         ))}
       </nav>
+      <div style={{ padding:'0 10px 12px' }}>
+        <button
+          type="button"
+          aria-expanded={notificationsOpen}
+          onClick={() => setNotificationsOpen(open => !open)}
+          style={{
+            display:'flex', alignItems:'center', justifyContent:'space-between', width:'100%',
+            padding:'10px 14px', borderRadius:10, background:'var(--surface)',
+            border:'1px solid var(--surface-border)', color:'var(--surface-text)', fontSize:13,
+          }}
+        >
+          <span>🔔 Notifications</span>
+          {unreadCount > 0 && (
+            <span style={{ minWidth:20, padding:'1px 6px', borderRadius:999, background:'var(--danger)', color:'#fff', fontSize:11, fontWeight:700 }}>
+              {unreadCount}
+            </span>
+          )}
+        </button>
+        {notificationsOpen && (
+          <div style={{ maxHeight:240, overflowY:'auto', marginTop:8, display:'grid', gap:6 }}>
+            {notifications.length === 0 ? (
+              <p style={{ padding:'10px 12px', color:'var(--text-light)', fontSize:12 }}>No notifications yet.</p>
+            ) : notifications.map(notification => (
+              <button
+                type="button"
+                key={notification.id}
+                onClick={() => {
+                  if (!notification.is_read) {
+                    markNotificationRead(notification.id).catch(error => console.error('Failed to mark notification as read', error));
+                  }
+                }}
+                style={{
+                  padding:'10px 12px', textAlign:'left', borderRadius:9,
+                  background:notification.is_read ? 'transparent' : 'rgba(0,180,166,0.12)',
+                  border:'1px solid var(--surface-border)', color:'var(--surface-text)',
+                }}
+              >
+                <span style={{ display:'block', fontSize:12, lineHeight:1.45 }}>{notification.message}</span>
+                <span style={{ display:'block', marginTop:5, color:'var(--text-light)', fontSize:10 }}>
+                  {new Date(`${notification.created_at.replace(' ', 'T')}Z`).toLocaleString()}
+                  {!notification.is_read && ' · New'}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <div style={{ padding:'14px 10px', borderTop:'1px solid var(--border)' }}>
         <div style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 12px', marginBottom:8 }}>
           <Avatar name={user?.name} size={34} />

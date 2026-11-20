@@ -1,0 +1,183 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Start MediBook Backend",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"start"
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Start MediBook Frontend",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"start",
+				"--prefix",
+				"frontend"
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Build frontend",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"build"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Verify MediBook Frontend Build",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"build",
+				"--prefix",
+				"frontend"
+			],
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Build MediBook Dashboard",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"build",
+				"--prefix",
+				"frontend"
+			],
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Build Admin Dashboard UI",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"build",
+				"--prefix",
+				"frontend"
+			],
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Verify Admin Dashboard Build",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"build",
+				"--prefix",
+				"frontend"
+			],
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Verify Dashboard Cards",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"build",
+				"--prefix",
+				"frontend"
+			],
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Build Notification UI",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"build",
+				"--prefix",
+				"frontend"
+			],
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Check Database Syntax",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"--check",
+				"db/database.js"
+			],
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Check API Syntax",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"--check",
+				"index.js"
+			],
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Verify Notification Schema",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"-e",
+				"const { db, initDb } = require('./db/database'); initDb((err) => { if (err) { console.error(err.message); process.exitCode = 1; db.close(); return; } db.get(\"SELECT name FROM sqlite_master WHERE type = 'trigger' AND name = ?\", ['notify_patient_on_appointment_status'], (queryErr, row) => { if (queryErr || !row) { console.error(queryErr ? queryErr.message : 'Notification trigger was not created'); process.exitCode = 1; } else { console.log('Notification table and appointment status trigger initialized.'); } db.close(); }); });"
+			],
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Verify Notification DB Setup",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"-e",
+				"const { db, initDb } = require(\"./db/database\"); initDb((err) => { if (err) { console.error(err.message); process.exitCode = 1; db.close(); return; } db.get(\"SELECT name FROM sqlite_master WHERE type = ? AND name = ?\", [\"trigger\", \"notify_patient_on_appointment_status\"], (queryErr, row) => { if (queryErr || !row) { console.error(queryErr ? queryErr.message : \"Notification trigger was not created\"); process.exitCode = 1; } else { console.log(\"Notification table and appointment status trigger initialized.\"); } db.close(); }); });"
+			],
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Run Notification Schema Check",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"verify-notification-db.js"
+			],
+			"problemMatcher": [],
+			"group": "build"
+		},
+		{
+			"label": "Test Patient Notifications",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"verify-notification-trigger.js"
+			],
+			"problemMatcher": [],
+			"group": "build"
+		}
+	]
+}

@@ -86,6 +86,37 @@ const REVIEWS_SQL = `
   )
 `;
 
+const NOTIFICATIONS_SQL = `
+  CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    appointment_id INTEGER,
+    type TEXT NOT NULL,
+    message TEXT NOT NULL,
+    is_read INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY(appointment_id) REFERENCES appointments(id) ON DELETE CASCADE
+  )
+`;
+
+const APPOINTMENT_STATUS_NOTIFICATION_TRIGGER_SQL = `
+  CREATE TRIGGER IF NOT EXISTS notify_patient_on_appointment_status
+  AFTER UPDATE OF status ON appointments
+  WHEN OLD.status != NEW.status AND NEW.status IN ('accepted', 'rejected')
+  BEGIN
+    INSERT INTO notifications (user_id, appointment_id, type, message)
+    SELECT p.user_id, NEW.id, NEW.status,
+           'Your appointment with ' || u.name || ' on ' ||
+           NEW.appointment_date || ' at ' || NEW.appointment_time ||
+           ' was ' || NEW.status || '.'
+    FROM patients p
+    JOIN doctors d ON d.id = NEW.doctor_id
+    JOIN users u ON u.id = d.user_id
+    WHERE p.id = NEW.patient_id;
+  END
+`;
+
 const initDb = (onReady) => {
   db.serialize(() => {
     db.run('PRAGMA foreign_keys = ON');
@@ -128,10 +159,24 @@ const initDb = (onReady) => {
             if (onReady) onReady(createErr);
             return;
           }
-          // Seed doctor/admin user accounts first, then create doctors/patients rows
-          ensureSeedUsers(() => {
-            seedDoctorsAndPatients(() => {
-              if (onReady) onReady(null);
+          db.run(NOTIFICATIONS_SQL, [], (notificationErr) => {
+            if (notificationErr) {
+              console.error('Error creating notifications table:', notificationErr);
+              if (onReady) onReady(notificationErr);
+              return;
+            }
+            db.run(APPOINTMENT_STATUS_NOTIFICATION_TRIGGER_SQL, [], (triggerErr) => {
+              if (triggerErr) {
+                console.error('Error creating appointment notification trigger:', triggerErr);
+                if (onReady) onReady(triggerErr);
+                return;
+              }
+              // Seed doctor/admin user accounts first, then create doctors/patients rows
+              ensureSeedUsers(() => {
+                seedDoctorsAndPatients(() => {
+                  if (onReady) onReady(null);
+                });
+              });
             });
           });
         });
